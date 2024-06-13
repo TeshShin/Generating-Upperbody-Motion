@@ -11,13 +11,16 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
+using UnityEditorInternal;
+using UnityEditor.TextCore.Text;
 
 public class TargetIK : MonoBehaviour
 {
+    // TargetIK는 
     #region Read-only & Static Fields
 
     protected float[] bonesLength; // Target to Origin
-    protected float completeLength;
+    public float completeLength;
     protected Transform[] bones;
     protected Vector3[] positions;
     protected Vector3[] startDirectionSucc;
@@ -33,9 +36,10 @@ public class TargetIK : MonoBehaviour
 
     [Header("FABRIK - Settings")]
     public int chainLength = 2;
-    public Transform target;
-    public Transform targetConstant;
-    public Transform pole;
+    public Transform target;    // 타겟
+    public Transform targetConstant; // 고정된 초기 타겟의 위치
+    public Transform pole; // 폴??
+    // 암튼 위 3개의 위치를 여기서 조정함.
     public int iterations = 10; // Solver iterations per update
     public float delta = 0.001f; // Distance when the solver stops
     [Range(0, 1)] public float snapBackStrength = 1f; // Strength of going back to the start position
@@ -50,8 +54,9 @@ public class TargetIK : MonoBehaviour
     [Header("Safety Region - Debug")]
     public bool debugIK;
 
-    #endregion
 
+    #endregion
+    // 1 TO-DO
     #region Unity Methods
 
     void Awake()
@@ -63,34 +68,35 @@ public class TargetIK : MonoBehaviour
     void Init()
     {
         // Initial array
-        bones = new Transform[chainLength + 1];
+        bones = new Transform[chainLength + 1]; // chainLength = 2
         positions = new Vector3[chainLength + 1];
         bonesLength = new float[chainLength];
         startDirectionSucc = new Vector3[chainLength + 1];
         startRotationBone = new Quaternion[chainLength + 1];
-
+        
         // Find root
         root = transform;
         for (var i = 0; i <= chainLength; i++)
         {
             if (root == null)
                 throw new UnityException("The chain value is longer than the ancestor chain!");
-            root = root.parent;
+            root = root.parent; // LeftShoulder까지 올라감
+            // Debug.Log(root);
         }
-
+        
         // Init target
         if (target == null)
         {
             target = new GameObject(gameObject.name + " Target").transform;
-            SetPositionRootSpace(target, GetPositionRootSpace(transform));
+            SetPositionRootSpace(target, GetPositionRootSpace(transform)); // 손의 위치를 target로 정함.
         }
         startRotationTarget = GetRotationRootSpace(target);
 
 
         // Init data
-        var current = transform;
+        var current = transform; // 처음엔 손의 위치
         completeLength = 0;
-        for (var i = bones.Length - 1; i >= 0; i--)
+        for (var i = bones.Length - 1; i >= 0; i--) // 2, 1, 0
         {
             bones[i] = current;
             startRotationBone[i] = GetRotationRootSpace(current);
@@ -98,17 +104,17 @@ public class TargetIK : MonoBehaviour
             if (i == bones.Length - 1)
             {
                 // Leaf
-                startDirectionSucc[i] = GetPositionRootSpace(target) - GetPositionRootSpace(current);
+                startDirectionSucc[i] = GetPositionRootSpace(target) - GetPositionRootSpace(current); // 타겟의 위치와 손의 위치를 빼서 방향을 얻음
             }
             else
             {
                 // Mid bone
-                startDirectionSucc[i] = GetPositionRootSpace(bones[i + 1]) - GetPositionRootSpace(current);
-                bonesLength[i] = startDirectionSucc[i].magnitude;
-                completeLength += bonesLength[i];
+                startDirectionSucc[i] = GetPositionRootSpace(bones[i + 1]) - GetPositionRootSpace(current); // 나중의 관절과 그 전의 관절의 위치 차이로 방향구함.
+                bonesLength[i] = startDirectionSucc[i].magnitude; // 방향 벡터의 길이로 뼈의 길이를 구함
+                completeLength += bonesLength[i]; // 손까지의 전체 길이를 구함.
             }
 
-            current = current.parent;
+            current = current.parent; // 점차 올라감.
         }
     }
 
@@ -155,7 +161,7 @@ public class TargetIK : MonoBehaviour
         //   x--------------------x--------------------x---...
 
         //get position
-        for (int i = 0; i < bones.Length; i++)
+        for (int i = 0; i < bones.Length; i++) // 0 1 2
         {
             positions[i] = GetPositionRootSpace(bones[i]);
         }
@@ -164,8 +170,9 @@ public class TargetIK : MonoBehaviour
         var targetRotation = GetRotationRootSpace(target);
 
         //1st is possible to reach?
-        if ((targetPosition - GetPositionRootSpace(bones[0])).sqrMagnitude >= completeLength * completeLength)
+        if ((targetPosition - GetPositionRootSpace(bones[0])).sqrMagnitude >= completeLength * completeLength) // root에서부터 타겟까지의 길이 >= root에서부터 손까지의 길이
         {
+            
             // Hand did not touch it yet
             if (target.CompareTag("LeftHand") && safetyRegionLeft.hasLeftTargetReached)
             {
@@ -176,8 +183,10 @@ public class TargetIK : MonoBehaviour
             {
                 safetyRegionRight.isRightInRange = false;
             }
-
-            //just strech it
+            // 닿을 수 없는 거리라면 손을 뻗기만 한다.
+            // 좀 어색함, 대신에 현재와 장애물의 속도에 따른 FK로 작동하도록 해야할듯.
+            // TO-DO
+            //just strech it 
             var direction = (targetPosition - positions[0]).normalized;
             //set everything after root
             for (int i = 1; i < positions.Length; i++)
@@ -185,6 +194,7 @@ public class TargetIK : MonoBehaviour
         }
         else
         {
+            
             // Hand did touch it 
             if (target.CompareTag("LeftHand") && safetyRegionLeft.hasLeftTargetReached)
             {
@@ -228,7 +238,7 @@ public class TargetIK : MonoBehaviour
 
         if (target.CompareTag("LeftHand"))
         {
-            target.transform.rotation = kinematicBody.rotation * Quaternion.Euler(new Vector3(0, 0, 180f));
+            target.transform.rotation = kinematicBody.rotation * Quaternion.Euler(new Vector3(0, 0, 180f)); // 흠.. 왜 돌린진 아직 모르겠음 뒤의 코드 봐보자.
         }
 
         if (target.CompareTag("RightHand"))
@@ -239,6 +249,7 @@ public class TargetIK : MonoBehaviour
 
     /// <summary>
     /// Place the IK target during the contact in certain position and rotation.
+    /// 접촉 중에 IK 타겟을 특정 위치에 놓고 회전시킵니다.
     /// </summary>
     /// <param name="reactionTime"></param>
     /// <param name="hasStartedMovingIn"></param>
@@ -448,7 +459,7 @@ public class TargetIK : MonoBehaviour
                     // TEST
                     armsIK.leftArmWeight = 1f; 
                 }
-
+                // target ___ hand의 rotation을 정하기 위한 것. target의 x방향이 손을 향한 방향임.
                 Vector3 forwardHit = new Vector3(-safetyRegionLeft.hitNormalLeft.z, 0, safetyRegionLeft.hitNormalLeft.x);
                 if (forwardHit != Vector3.zero)
                     rotationToNormal = Quaternion.LookRotation(forwardHit, Vector3.Cross(forwardHit, safetyRegionLeft.hitNormalLeft));
@@ -458,7 +469,6 @@ public class TargetIK : MonoBehaviour
 
                 // Not a priority, we just set the final rotation directly
                 target.transform.rotation = rotationToNormal;
-
                 yield return null;
             }
             while ((timeElapsed < moveTime) && !(safetyRegionLeft.hasLeftTargetReached) && !(safetyRegionLeft.hasLeftStartedMovingOut)); // (timeElapsed < moveTime) && !(safetyRegionLeft.hasLeftStartedMovingOut) // HERE WAS THE FIX
@@ -652,13 +662,15 @@ public class TargetIK : MonoBehaviour
             current.position = root.rotation * position + root.position;
     }
 
-    private Quaternion GetRotationRootSpace(Transform current)
+    private Quaternion GetRotationRootSpace(Transform current) // current가 다른 트랜스폼 root에 대하여 상대적인 회전을 계산
     {
         //inverse(after) * before => rot: before -> after
         if (root == null)
             return current.rotation;
         else
-            return Quaternion.Inverse(current.rotation) * root.rotation;
+            return Quaternion.Inverse(current.rotation) * root.rotation; 
+        /* Quaternion.Inverse(current.rotation)는 current의 회전을 반대로 뒤집는 연산입니다. 이렇게 하면, current를 월드 좌표계(또는 부모 좌표계)로부터 로컬 좌표계로 변환하는 역회전(Quaternion)이 생성됩니다.
+        이 역회전에 root.rotation을 곱함으로써, current의 회전을 root의 회전 기준으로 변환합니다.결과적으로 이 연산은 current가 root에 비해 어떻게 회전되어 있는지를 나타내는 Quaternion을 반환합니다.*/
     }
 
     private void SetRotationRootSpace(Transform current, Quaternion rotation)

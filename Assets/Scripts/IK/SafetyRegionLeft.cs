@@ -95,9 +95,10 @@ public class SafetyRegionLeft : SafetyRegion
     void Update()
     {
         sphereColliderLeft.radius = radiusRegion;
-        sphereColliderLeft.center = transform.InverseTransformPoint(originRegion.position) + originOffset;
+        sphereColliderLeft.center = transform.InverseTransformPoint(originRegion.position) + originOffset; // LeftArm의 위치에서 originOffset 만큼 더한 곳을 원점으로 지정.
 
         // Extension Colliders - New
+        // 추가적인 콜리전을 넣어서 측정하는 것임.
         sphereColliderLeft2.center = sphereColliderLeft.center + sphereColliderLeft2Center + new Vector3(0f, 0f, radiusRegion);
         sphereColliderLeft2.radius = sphereColliderLeft2Center.z + radiusRegion;
 
@@ -165,6 +166,7 @@ public class SafetyRegionLeft : SafetyRegion
             }
 
             // Add new obstacle to the dynamic list
+            //  Safety Region과 만난 물체에서 LeftArm과 가장 가까운 지점을 찾는다.
             Vector3 closestPoint = Physics.ClosestPoint(raycastOriginLeft, other, other.transform.position, other.transform.rotation) + offset;
 
             // TODO: Retrieve mass
@@ -183,11 +185,15 @@ public class SafetyRegionLeft : SafetyRegion
             //Debug.Log("[INFO] Obstacle STAYS LEFT: " + other.name);
 
             // We protect the origin, and get the closest point in the external object to the previous body part to protect
-            raycastOriginLeft = originRegion.position;
+            raycastOriginLeft = originRegion.position; // LeftArm의 Position임.
 
             // Take the instance of the obstacle that corresponds, and update at each time the closest point and distance to it
+            //  obstacles 리스트에서 현재 트리거 된 obstacle을 찾는다.
             Obstacle currentObstacle = obstacles.Find(x => x.obstacle == other);
+            //  Safety Region과 만난 물체에서 LeftArm과 가장 가까운 지점을 찾는다.
             Vector3 closestPoint = Physics.ClosestPoint(raycastOriginLeft, other, other.transform.position, other.transform.rotation);
+
+            // 현재 손이 가야할 지점을 나타낸다.
             currentObstacle.location = closestPoint;
             currentObstacle.distance = Vector3.Distance(closestPoint, raycastOriginLeft);
             
@@ -208,7 +214,7 @@ public class SafetyRegionLeft : SafetyRegion
             // If we update the obstacle for a new one, we make colliderChanged TRUE
             if (prevObstacle != nowObstacle)
             {
-                colliderChanged = true;
+                colliderChanged = true; // 이걸 이용해서 다른 물체로 추적 시 자연스럽게 되도록 하자.
                 Debug.Log("[TEST] colliderChanged LEFT: " + colliderChanged);
                 prevObstacle = nowObstacle;
             }
@@ -224,8 +230,8 @@ public class SafetyRegionLeft : SafetyRegion
             if (hasLeftStartedMovingIn)
             {
                 Debug.Log("[TEST] Fixing to pose because hasLeftStartedMovingIn: " + hasLeftStartedMovingIn);
-                hitLeftFixed = hitLeft;
-                localHitLeftFixed = (hitLeftFixed - other.transform.position);
+                hitLeftFixed = hitLeft; // hitleft : obstacle의 closest point임.
+                localHitLeftFixed = (hitLeftFixed - other.transform.position); // obstacle의 중점으로 부터 계산된 closestpoint의 local position이다.
 
             }
             else
@@ -236,9 +242,14 @@ public class SafetyRegionLeft : SafetyRegion
                 if (other.CompareTag("Dynamic Obstacle"))
                 {
                     // Create an offset, in case it is necessary
+                    // leftTargetTransform은 Target Left Hand의 transform
+                    // hitOffsetLeft는 0.05, 0, 0임 왜 이 수치인지는 잘 모르겟음.
+                    // leftTargetTransform을 기준으로 상대적인 위치를 계산하는 새로운 Vector3 벡터 offset을 얻습니다.
+                    // leftTargetTransform의 위치에서 hitOffsetLeft에 지정된 x, y, z 방향으로 각각 이동한 위치를 종합한 결과입니다.
                     Vector3 offset = (leftTargetTransform.up * hitOffsetLeft.y) + (leftTargetTransform.right * hitOffsetLeft.x) + (leftTargetTransform.forward * hitOffsetLeft.z);
 
                     // Two modes: First one is experimental
+                    // 안씀 일단 무시하자.
                     if (fixHandToDynamicObject)
                     {
                         hitLeftFixed = other.transform.position + localHitLeftFixed + offset;
@@ -247,10 +258,12 @@ public class SafetyRegionLeft : SafetyRegion
                     {
                         // During the contact, we update constantly to the hit
                         // If the system detects a change of obstacle, we update the bools, that will induce again the smooth transition
+                        // obstacle에 변경이 포착되면 자연스러운 변환을 할 것임.
                         if (!colliderChanged && !hasLeftStartedMovingIn)
                         {
                             Debug.Log("[TEST] Fixing to pose because colliderChanged: " + colliderChanged + " and hasLeftStartedMovingIn: " + hasLeftStartedMovingIn);
-                            hitLeftFixed = hitLeft + offset;
+                            hitLeftFixed = hitLeft + offset; // 이거 코드 왜있는거지? 바깥으로 밀어내기 위한 코드 같은데 왜 x방향으로 더 밀어내는거지?
+                                                             // => x방향이 물체의 normal 방향이라서 normal 방향으로 손이 오기 때문에 물체와의 텀을 두기 위해서 한듯?
                         }
                         else if (colliderChanged)
                         {
@@ -262,7 +275,7 @@ public class SafetyRegionLeft : SafetyRegion
                         }
                     }
                 }
-                else if (other.CompareTag("Static Obstacle"))
+                else if (other.CompareTag("Static Obstacle")) // 일단 넘어감
                 {
                     if (!isLeftInRange)
                     {
@@ -281,8 +294,9 @@ public class SafetyRegionLeft : SafetyRegion
             }
 
             // =====
-
+            // 여기서부터 해석해야함.
             // Launch a ray from the body part to protect, in the direction the closest point (like in the previous red ray)
+            // 보호하기 위해 신체 부위에서 광선을 발사합니다(이전 빨간색 광선과 같이)
             if (Physics.Raycast(raycastOriginLeft, (hitLeftFixed - originRegion.position), out RaycastHit hit, Mathf.Infinity, LayerMask.GetMask("Obstacle")))
             {
                 hitNormalLeft = hit.normal;
@@ -295,6 +309,9 @@ public class SafetyRegionLeft : SafetyRegion
 
                 // Method in charge of moving behaviour, which changes if we are on the move or we arrived
                 // hasLeftStartedMovingIn will be TRUE until we reach the object
+
+                // 이동 중이거나 도착하면 변경되는 이동 행동을 담당하는 방법
+                // has Left Started Moving In은 개체에 도달할 때까지 TRUE입니다
                 leftTarget.SetTargetStay(reactionTime, hasLeftStartedMovingIn);
             }
 
